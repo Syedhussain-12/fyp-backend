@@ -78,6 +78,9 @@ from rest_framework import status
 from .models import Chat
 from .serializer import ChatSerializer
 
+CALENDAR_CREDENTIALS= ''
+load_dotenv()
+
 @api_view(['GET','POST'])
 def user(request):
     print('cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',request)
@@ -215,6 +218,13 @@ def calendar(request):
 
     # print(output)
 
+def get_oauth_credentials(client_secrets_file):
+    scopes = ['https://www.googleapis.com/auth/calendar.events']
+    flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, scopes=scopes)
+    creds = flow.run_local_server(port=51010)
+    print('4444444444444444444444')
+    return creds
+
 @api_view(['GET','POST'])
 def combineAgent(request):
     toolkit = GmailToolkit(redirect_url="http://localhost:51010/")
@@ -235,28 +245,25 @@ def combineAgent(request):
     api_resource = build_resource_service(credentials=credentials)
     toolkit = GmailToolkit(api_resource=api_resource)
     tools = toolkit.get_tools()
-    load_dotenv()
+  
     print('3333333333333')
     instructions = """You are an assistant."""
     base_prompt = hub.pull("langchain-ai/openai-functions-template")
     prompt = base_prompt.partial(instructions=instructions)
     llm = ChatOpenAI(temperature=0)
-    load_dotenv()
-    # def get_oauth_credentials(client_secrets_file):
-    #     scopes = ['https://www.googleapis.com/auth/calendar.events']
-    #     flow = InstalledAppFlow.from_client_secrets_file(client_secrets_file, scopes=scopes)
-    #     creds = flow.run_local_server(port=51010)
-    #     print('4444444444444444444444')
-    #     return creds
+    # load_dotenv()
+
 
     def build_resource_service(credentials):
         service = build('calendar', 'v3', credentials=credentials)
         print('5555555555555')
         return service
-       
-    credentials = get_oauth_credentials(client_secrets_file="credentials.json")
-
-    api_resource = build_resource_service(credentials=credentials)
+    global CALENDAR_CREDENTIALS
+    if CALENDAR_CREDENTIALS=='':
+        
+        CALENDAR_CREDENTIALS = get_oauth_credentials(client_secrets_file="credentials.json")
+    print("testttttttt",credentials)
+    api_resource = build_resource_service(credentials=CALENDAR_CREDENTIALS)
     combined_tools = toolkit.get_tools() + [ListEvents(api_resource=api_resource),
         CreateNewEvent(api_resource=api_resource),
         UpdateExistEvent(api_resource=api_resource),
@@ -275,10 +282,12 @@ def combineAgent(request):
         # output = agent_executor.invoke(
         # {'input':"Find the event scheduled on 2023-11-14 at 10:00 has summary 'test', returned html link and event summary."}
         # )
-    return Response (
-            agent_executor.invoke(
-        {'input':"please email to hamdanmadara@gmail.com and write a short paragraph on sports with a subject Sport. direct send email i don't need draft to review"}
-        ))
+    data1 = request.data
+    input = data1.get('user_input')
+    output = agent_executor.invoke(
+        {'input':input}
+    )
+    return Response(output)         
     
     
 #gfhghf
@@ -334,9 +343,12 @@ def insert_and_fetch_chats(request):
             print('5555555555555')
             return service
         
-        credentials = get_oauth_credentials(client_secrets_file="credentials.json")
-
-        api_resource = build_resource_service(credentials=credentials)
+        global CALENDAR_CREDENTIALS
+        if CALENDAR_CREDENTIALS=='':
+            
+            CALENDAR_CREDENTIALS = get_oauth_credentials(client_secrets_file="credentials.json")
+        print("testttttttt",credentials)
+        api_resource = build_resource_service(credentials=CALENDAR_CREDENTIALS)
         combined_tools = toolkit.get_tools() + [ListEvents(api_resource=api_resource),
             CreateNewEvent(api_resource=api_resource),
             UpdateExistEvent(api_resource=api_resource),
@@ -357,17 +369,18 @@ def insert_and_fetch_chats(request):
             # )
        
 
-        request_data = request.data
-        response= Response (
-                agent_executor.invoke(
-            {'input':request_data['user_input']}
-            ))
-        print('aaaaaaaaaaaaaaaa')
-        print(request_data, type(request_data))
-        print('bbbbbbbbbbbbbbbbb')
-        print( type(response))
-        print('ccccccccccccccccc')
-        
+        # request_data = request.data
+        # response= Response (
+        #         agent_executor.invoke(
+        #     {'input':request_data['user_input']}
+        #     ))
+        data1 = request.data
+        input = data1.get('user_input')
+        output = agent_executor.invoke(
+            {'input':input}
+        )
+        response= Response(output)   
+            
         response_data = response.data
 
 # Now you can access the 'output' key
@@ -376,13 +389,13 @@ def insert_and_fetch_chats(request):
         
         
        
-        request_data['ai_response']= output_value
+        data1['ai_response']= output_value
         
         # Insert new chat record
-        serializer = ChatSerializer(data=request_data)
+        serializer = ChatSerializer(data=data1)
         if serializer.is_valid():
             serializer.save()
-            email = request_data.get('email')
+            email = data1.get('email')
             if email:
                 chats = Chat.objects.filter(email=email)
                 chat_serializer = ChatSerializer(chats, many=True)
